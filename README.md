@@ -4,3 +4,5 @@ An analytical model (of the forward problem) suggests a numerical procedure (for
   1) Simulates the forward problem and synthesizes 2D scattering patterns;
   2) Forms the Distance Matrix of scattering patterns; and
   3) Retrieves the (relative) orientations using the Distance Matrix.
+More details: http://arxiv.org/abs/1411.7889
+
