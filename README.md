@@ -13,8 +13,4 @@ An analytical model (of the forward problem) suggests a numerical procedure (for
 More details: http://arxiv.org/abs/1411.7889
 </p>
 
-<p align="center">
-<img src="./dm.png"></img>
-</p>
-
-
+![](./assets/matlab/dm.png)
