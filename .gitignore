@@ -1,0 +1,4 @@
+.vscode
+
+artifacts/*
+!artifacts/.gitkeep

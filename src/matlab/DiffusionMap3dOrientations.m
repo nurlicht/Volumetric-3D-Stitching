@@ -1,5 +1,5 @@
 %% Major functions
-function []=DM(varargin)
+function []=DiffusionMap3dOrientations(varargin)
     %Initialization
     close all force;
     clear all;
