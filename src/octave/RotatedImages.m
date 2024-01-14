@@ -1,15 +1,17 @@
-function []= RotatedImages()
+function [Axis, Images]= RotatedImages(nRot1D)
     % Input parameters
-    N_loop=28^3;   %Cube of an "even" integer
+    N_loop=nRot1D^3;   %28 Cube of an "even" integer
     Experiment=Experiment_Parameters();
+    save '../../artifacts/Experiment.mat' Experiment '-text';
 
     % Loading the object
-    WaitBar=waitbar(0,'Generating the 3D object');drawnow;
     Protein=Load_Protein();
 
     % Separating Object values (at voxels) and space coordinates
     Grid_3D=Protein.Grid_3D;
     ED=Protein.ED;
+    save '../../artifacts/Grid_3D.mat' Grid_3D '-text';
+    save '../../artifacts/ED.mat' ED '-text';
     clear Protein;
 
     % Imaging w/ initial orientation
@@ -17,19 +19,22 @@ function []= RotatedImages()
     N_p2=N_p^2;
 
     % Loop
-    WaitBar=waitbar(0,WaitBar,'Generating Rotation Matrices');drawnow;
-    R=AllRotMatrices(N_loop);
+    [R, Axis] =AllRotMatrices(N_loop);
 
     R_size=[3 3];
-    WaitBar=waitbar(0,WaitBar,'Memory allocation');drawnow;
     Images=randn(N_p2,N_loop);  %Memory allocation
-    WaitBar=waitbar(0,WaitBar,['Generating ' num2str(N_loop) ...
-        ' snapshots']);drawnow;
 
     [Lambda,zD,Width,N]=Extract_ExpParam(Experiment);
     [Length,Number]=Extract_Coordinates(Grid_3D);
 
-    [~,k]=FourierScaledAxes(Number,Length);
+    [Nyquist,k]=FourierScaledAxes(Number,Length);
+    k_x = k.x;
+    k_y = k.y;
+    k_z = k.z;
+    save '../../artifacts/Nyquist.mat' Nyquist '-text';
+    save '../../artifacts/k_x.mat' k_x '-text';
+    save '../../artifacts/k_y.mat' k_y '-text';
+    save '../../artifacts/k_z.mat' k_z '-text';
 
     % Camera coordinate (k-space)
     [Camera_x,Camera_y]=meshgrid((Width/(N-1))*((1:N)-(N+1)/2));
@@ -41,18 +46,27 @@ function []= RotatedImages()
 
     for cntr=1:N_loop
         ED_rot=RotateStructureIndex(ED,reshape(R(:,cntr),R_size));
-        Camera_I=interp3(k.x,k.y,k.z,Shift_FFT(abs(fftn(ED_rot))),...
+        ED_rot_f_original=abs(fftn(ED_rot));
+        ED_rot_f=Shift_FFT(ED_rot_f_original);
+        Camera_I_original=interp3(k.x,k.y,k.z,ED_rot_f,...
             Q_x,Q_y,Q_z,'linear',0);
+        Camera_I=Camera_I_original;
         Camera_I(Circle_Index)=0;
         Images(:,cntr)=reshape(Camera_I,[N_p2 1]);
-        if ~mod(cntr,50)
-            waitbar(cntr/N_loop,WaitBar,['Generating snapshot ' ...
-                num2str(cntr) ' out of ' num2str(N_loop)]);drawnow;
-        end
+        save '../../artifacts/ED_rot.mat' ED_rot '-text';
+        save '../../artifacts/ED_rot_f_original.mat' ED_rot_f_original '-text';
+        save '../../artifacts/ED_rot_f.mat' ED_rot_f '-text';
+        save '../../artifacts/Camera_I_original.mat' Camera_I_original '-text';
+        save '../../artifacts/Camera_I.mat' Camera_I '-text';
     end
-    WaitBar=waitbar(0,WaitBar,'Saving snapshots');drawnow;
-    save '../../artifacts/Images.mat' Images '-v6';
-    close(WaitBar);drawnow;
+    save '../../artifacts/Camera_x.mat' Camera_x '-text';
+    save '../../artifacts/Camera_y.mat' Camera_y '-text';
+    save '../../artifacts/Circle_Index.mat' Circle_Index '-text';
+    save '../../artifacts/Temp.mat' Temp '-text';
+    save '../../artifacts/Q_x.mat' Q_x '-text';
+    save '../../artifacts/Q_y.mat' Q_y '-text';
+    save '../../artifacts/Q_z.mat' Q_z '-text';
+    save '../../artifacts/Images.mat' Images '-text';
 end
 function Experiment=Experiment_Parameters()
     N_P_NoBin=1024;
@@ -78,12 +92,8 @@ function Protein=Load_Protein(varargin)
     switch Protein_Source
         case 1
             Protein_File='Protein.mat';
-            WaitBar=waitbar(0,'Loading protein data');
-            pause(1e-3);
             Protein=load(Protein_File);
             Protein=Protein.Protein;
-            delete(WaitBar);
-            pause(1e-3);
         case 2
             if nargin==1
                 Protein=IR_3D(varargin{1});

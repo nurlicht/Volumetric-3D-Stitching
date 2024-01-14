@@ -1,17 +1,10 @@
-function []=CalculateDiffusion(k,Epsilon,aPrioriFlag)
+function [Ps, Lambda, c0, c]=CalculateDiffusion(S2, N, Rotation_Axis, k,Epsilon,aPrioriFlag)
     pkg load statistics
     pkg load signal
     pkg load optim
 
-    Wait_Bar=waitbar(0,'Loading matrices');drawnow;
-    S2=importdata('../../artifacts/S2.mat');
-    N=importdata('../../artifacts/N.mat');
-    Rotation_Axis=importdata('../../artifacts/Axis.mat');
     Rotation_R=Axis2RotUnfold(Rotation_Axis);
-    Wait_Bar=waitbar(0.5,Wait_Bar,...
-        'Finding the Diffusion Coordinate \psi');drawnow;
     [Ps,Lambda]=Diffusion_Coordinate(S2,N,Epsilon);
-    close(Wait_Bar);drawnow;
     if isnan(Lambda)
         disp(['Problem in convergence of eigenvalues with Epsilon=' ...
             num2str(Epsilon) ' and k=' num2str(k)]);
@@ -19,12 +12,7 @@ function []=CalculateDiffusion(k,Epsilon,aPrioriFlag)
         disp(['Complex eigenvector found with Epsilon=' ...
             num2str(Epsilon) ' and k=' num2str(k)]);
     else
-        Plot_Diffusion_Coordinate(Ps,Lambda,Rotation_Axis);
-        save '../../artifacts/Ps.mat' Ps -v6;
-        save '../../artifacts/Lambda.mat' Lambda -v6;
         [c,c0]=DM_Fit_All(Ps,Rotation_R,aPrioriFlag);
-        save '../../artifacts/c0.mat' c0 -v6;
-        save '../../artifacts/c.mat' c -v6;
     end
 end
 function [c,c0]=DM_Fit_All(Ps,Rotation_R,aPrioriFlag)
@@ -33,7 +21,6 @@ function [c,c0]=DM_Fit_All(Ps,Rotation_R,aPrioriFlag)
     else
         aPrioriText=' {\bfwithout} ';
     end
-    WB=waitbar(0,['Finding C' aPrioriText 'known rotations']);drawnow;
     Ps=Ps(:,2:end);
     Rotation_R=Rotation_R';
     if aPrioriFlag
@@ -50,9 +37,6 @@ function [c,c0]=DM_Fit_All(Ps,Rotation_R,aPrioriFlag)
         c=pinv(reshape(c_1D,[9 9]));
         c0=pinv(reshape(c0_1D,[9 9]));
     end
-    figure;imagesc(c);axis equal;axis off;title('Matrix C(9,9)');colorbar;
-    WB=waitbar(0,WB,['Assessment of estimation (' aPrioriText ...
-        'known rotations)']);drawnow;
     Recon_R=Ps*c;
     N=size(Ps,1);
     for cntr=1:N
@@ -66,17 +50,12 @@ function [c,c0]=DM_Fit_All(Ps,Rotation_R,aPrioriFlag)
         Q_1(1:4,cntr)=RotMat2Quat(r0);
         r0=reshape(Rotation_R(cntr,:),[3 3]);
         Q_2(1:4,cntr)=RotMat2Quat(r0);
-        if ~mod(cntr,5)
-            WB=waitbar(cntr/N,WB,'Forming rotation arrays');drawnow;
-        end
     end
-    WB=waitbar(0,WB,'Assessment of estimated {\bfQuaternions}');drawnow;
     TempA=real(acos(abs(Q_1'*Q_1)));    %Pairwise geodesic distances
     TempB=real(acos(abs(Q_2'*Q_2)));    %Pairwise geodesic distances
     Sigma_T=(180/pi)*2*sum(abs(TempA(:)-TempB(:)))/(N*(N-1));
     disp('Measure of error in Relative Orientations of All Pairs')
     disp(['Sigma_All_Pairs: ' num2str(Sigma_T) ' degrees'])
-    close(WB);drawnow;
 end
 
 
@@ -151,120 +130,6 @@ function Options=Opt_param(varargin)
     %Options.PlotFcns=@optimplotx;
     Options.Algorithm='trust-region-reflective';
 %    Options.Algorithm='levenberg-marquardt';
-end
-
-%% Miscellaneous plots of the diffusion coordinate
-function Plot_Diffusion_Coordinate(Ps,Lambda,Rotation)
-    Plot_Eigenvalue_Eigenvector(Ps,Lambda)
-    Plot_Individual_EV(Ps,Lambda)
-    Plot_Diffusion_Statistics(Ps)
-    Plot_Corr_Ps(Ps);
-    Plot_Psi234_ColorRot(Ps,Lambda,Rotation,'Axis')
-end
-function Plot_Eigenvalue_Eigenvector(Ps,Lambda)
-    figure
-    set(gca,'NextPlot','replacechildren');
-    subplot(211)
-    imagesc(Ps)
-    colorbar
-    title('Diffusion map eigenfunctions {\psi_i}')
-    subplot(212)
-    plot(Lambda,'-*')
-    colorbar
-    title('Diffusion map eigenvalues')
-end
-function Plot_Diffusion_Statistics(Ps)
-    figure
-    set(gca,'NextPlot','replacechildren');
-    subplot(221)
-    bar(Ps(:));
-    title(['First 10 \psi, min=' num2str(min(Ps(:))) ...
-        ', Max=' num2str(max(Ps(:)))]);
-    PsNorm=Ps(:,1).^2;
-    for cntr=2:10
-        PsNorm=PsNorm+Ps(:,cntr).^2;
-    end
-    PsNorm=sqrt(PsNorm);
-    subplot(222)
-    bar(PsNorm);
-    title(['10-element norm, min=' num2str(min(PsNorm)) ...
-        ', Max=' num2str(max(PsNorm))]);
-    subplot(223)
-    histfit(PsNorm,500);
-    title('10-element norm histogram');
-    subplot(224)
-    Index=(1:size(PsNorm,1))';
-    Index=2*pi*Index/max(Index);
-    polar(Index,PsNorm,'b');
-    title('10-element norm polar histogram');
-    hold on
-    polar(Index,mean(PsNorm)*ones(size(PsNorm)),'r--');
-    hold off
-end
-function Plot_Individual_EV(Ps,Lambda)
-    figure
-    set(gca,'NextPlot','replacechildren');
-    for cntr=1:9
-        subplot(3,3,cntr)
-        plot(Ps(:,cntr+1).*Lambda(cntr+1))
-        title(['\psi_' num2str(cntr+1)])
-    end
-end
-function Plot_Psi234_ColorRot(Ps,Lambda,Rot,Text)
-    for cntr=1:size(Rot,1)
-        figure
-        set(gca,'NextPlot','replacechildren');
-
-        subplot(221)
-        scatter(Ps(:,2).*Lambda(2),Ps(:,3).*Lambda(3),20,Rot(cntr,:))
-        title(['Phase plane: \psi_2 vs. \psi_3 - Color-coded by ' ...
-            Text ' ' num2str(cntr)]);
-        colorbar
-
-        subplot(222)
-        scatter(Ps(:,2).*Lambda(2),Ps(:,4).*Lambda(4),20,Rot(cntr,:))
-        title(['Phase plane: \psi_2 vs. \psi_4 - Color-coded by ' ...
-            Text ' ' num2str(cntr)]);
-        colorbar
-
-        subplot(223)
-        scatter(Ps(:,3).*Lambda(3),Ps(:,4).*Lambda(4),20,Rot(cntr,:))
-        title(['Phase plane: \psi_3 vs. \psi_4 - Color-coded by ' ...
-            Text ' ' num2str(cntr)]);
-        colorbar
-
-        subplot(224)
-        scatter3(Ps(:,2).*Lambda(2),Ps(:,3).*Lambda(3),...
-            Ps(:,4).*Lambda(4),20,Rot(cntr,:))
-        title(['Phase plane: \psi_2-\psi_3-\psi_4 - Color-coded by ' ...
-            Text ' ' num2str(cntr)]);
-        colorbar
-    end
-    drawnow;
-end
-function Plot_Corr_Ps(Ps)
-    figure
-    subplot(4,1,1)
-    plot(real(xcov(Ps(:,2),Ps(:,2))))
-    title('Covariance of \psi_2 and \psi_2');
-    legend('Auto correlation')
-    ylim([-0.2 1.1])
-    subplot(4,1,2)
-    plot(real(xcov(Ps(:,2),Ps(:,3))))
-    title('Covariance of \psi_2 and \psi_3');
-    legend('Cross correlation')
-    ylim([-0.2 1.1])
-    subplot(4,1,3)
-    plot(real(xcov(Ps(:,2),Ps(:,4))))
-    title('Covariance of \psi_2 and \psi_4');
-    legend('Cross correlation')
-    ylim([-0.2 1.1])
-    subplot(4,1,4)
-    plot(real(xcov(Ps(:,3),Ps(:,4))))
-    title('Covariance of \psi_3 and \psi_4');
-    legend('Cross correlation')
-    ylim([-0.2 1.1])
-    drawnow;
 end
 
 %% Imposing the rotation matrix constraints to find {c}
