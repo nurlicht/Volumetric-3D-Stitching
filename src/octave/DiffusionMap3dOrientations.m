@@ -25,5 +25,6 @@ function []=DiffusionMap3dOrientations(args)
     save '../../artifacts/Lambda.mat' Lambda -text;
     save '../../artifacts/c0.mat' c0 -text;
     save '../../artifacts/c.mat' c -text;
+    PlotResults(Ps,Lambda,Rotation_Axis)
 end
 
