@@ -1,4 +1,6 @@
+from typing import Any
 import numpy as np
+from compute import ComputeUtils
 from rotation import Rotation
 from utils import Utilities
 
@@ -12,16 +14,18 @@ from utils import Utilities
 class Projector:
     
   @staticmethod
-  def generate(nRot1D: int) -> [np.array]:
+  def generate(nRot1D: int, n_voxel_1d: int) -> [np.array]:
+    print('Projector.generate started.')
+
     # Input parameters
-    Experiment = Projector.experiment_parameters()['Experiment']
+    Experiment = Projector.experiment_parameters(n_voxel_1d)['Experiment']
     Protein = Projector.synsthesize_3d(Experiment['n_voxel_1d'])
     N_loop = nRot1D ** 3   #28 Cube of an "even" integer
 
     # Camera coordinate (k-space)
     [Q, Circle_Index] = Projector.q_and_mask(Experiment)
 
-    R = Rotation.all_rot_variables(N_loop)[0]
+    [R, Axis, Quat] = Rotation.all_rot_variables(N_loop)
     k = Projector.fourier_scaled_axes_from_grid(Protein['Grid_3D'])[2]
 
     N_p2 = Experiment['N_p'] ** 2
@@ -31,13 +35,20 @@ class Projector:
     for cntr in range(0, N_loop):
       Images[:, cntr] = Projector.generate_single_image(
         Protein['ED'],
-        R[:,cntr].reshape((3, 3)),
+        R[:,cntr].reshape((3, 3)).T,
         k,
         Q,
         Circle_Index
       )[0]
+      Utilities.log_progress('Projector.generate', cntr, N_loop)
 
-    return [Images.T, R]
+    print('')
+
+    Utilities.check(Images[Images != 0].size > 0, 'Images is an all-zero array.')
+
+    print('Projector.generate ended.')
+
+    return [Images.T, R, Axis, Quat]
 
 
   @staticmethod
@@ -47,7 +58,7 @@ class Projector:
     ED_rot = Rotation.rotate_structure_index(ED, R)
     ED_rot_f = np.fft.fftshift(abs(np.fft.fftn(ED_rot)))
 
-    Camera_I = Utilities.interp3(
+    Camera_I = ComputeUtils.interp3(
       k['x'], k['y'], k['z'],
       ED_rot_f,
       Q['x'], Q['y'], Q['z']
@@ -61,11 +72,11 @@ class Projector:
 
 
   @staticmethod
-  def synsthesize_3d(n_voxel_1d) -> {}:
+  def synsthesize_3d(n_voxel_1d: int) -> dict[str, Any]:
     N = n_voxel_1d
     U = (np.linspace(1, N, N) - (N + 1) / 2) / (N / 2)
 
-    [z, x, y] = Utilities.meshgrid_3d_single(U)
+    [z, x, y] = ComputeUtils.meshgrid_3d_single(U)
 
     A = x / 0.47
     B = y / 0.37
@@ -81,11 +92,11 @@ class Projector:
 
 
   @staticmethod
-  def experiment_parameters() -> {}:
+  def experiment_parameters(n_voxel_1d: int) -> dict[str, int | dict[str, int | float]]:
      parameters = {
       'N_P_NoBin': 1024,
       'Experiment': {
-        'n_voxel_1d': 31,
+        'n_voxel_1d': n_voxel_1d,
         'Pixel': 75e-6,
         'zD': 0.5,
         'Lambda': 2*1e-9,
@@ -116,12 +127,12 @@ class Projector:
 
 
   @staticmethod
-  def fourier_scaled_axes(Number: [int], Length: [float]) -> [{}]:
+  def fourier_scaled_axes(Number: [int], Length: [float]) -> [dict[str, float]]:
     [Nyquist_x, k_x_1D] = Projector.fourier_scaled_axis(Number[0], Length['x'])
     [Nyquist_y, k_y_1D] = Projector.fourier_scaled_axis(Number[1], Length['y'])
     [Nyquist_z, k_z_1D] = Projector.fourier_scaled_axis(Number[2] ,Length['z'])
  
-    [k_z, k_x, k_y] = Utilities.meshgrid_3d(k_z_1D, k_x_1D, k_y_1D)
+    [k_z, k_x, k_y] = ComputeUtils.meshgrid_3d(k_z_1D, k_x_1D, k_y_1D)
  
     return [
       {'x': Nyquist_x, 'y': Nyquist_y, 'z': Nyquist_z},
@@ -130,7 +141,7 @@ class Projector:
     ]
 
   @staticmethod
-  def fourier_scaled_axes_from_grid(Grid_3D: np.array) -> [{}]:
+  def fourier_scaled_axes_from_grid(Grid_3D: np.array) -> [dict[str, float]]:
     [Length, Number] = Projector.extract_coordinates(Grid_3D)
  
     return Projector.fourier_scaled_axes(Number, Length)
@@ -178,23 +189,3 @@ class Projector:
  
     return [Camera_x, Camera_y]
 
-
-  @staticmethod
-  def fft_shift(F: np.array) -> np.array:
-    N = [F.shape[0], F.shape[1], F.shape[2]]
-    Nh = [(N[0] - 1) / 2, (N[1] - 1) / 2, (N[2] - 1) / 2]
-    Index = [None, None, None]
-
-    for cntr in range(0, 3):
-      a = np.arange(Nh[cntr] + 2, N[cntr] + 1)
-      b = np.arange(1, Nh[cntr] + 2)
-      c = [a.reshape(1, a.size), b.reshape(1, b.size)]
-      Index[cntr] = np.hstack(c) - 1
-
-    G = F.copy()
-    for i in range(0, F.shape[0]):
-      for j in range(0, F.shape[1]):
-        for k in range(0, F.shape[2]):
-          G[i][j][k] = F[(int) (Index[0][0][i])][(int) (Index[1][0][j])][(int) (Index[2][0][k])]
-
-    return G

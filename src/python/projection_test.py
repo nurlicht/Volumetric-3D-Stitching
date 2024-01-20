@@ -9,7 +9,7 @@ class ProjectorTest(unittest.TestCase):
 
   def test_synsthesize_3d(self: unittest.TestCase):
     # Initialize
-    n_voxel_1d = Projector.experiment_parameters()['Experiment']['n_voxel_1d']
+    n_voxel_1d = 31
 
     # Run
     result = Projector.synsthesize_3d(n_voxel_1d)['ED']
@@ -20,7 +20,8 @@ class ProjectorTest(unittest.TestCase):
 
   def test_camera_x_y(self: unittest.TestCase):
     # Initialize
-    Experiment = Projector.experiment_parameters()['Experiment']
+    n_voxel_1d = 31
+    Experiment = Projector.experiment_parameters(n_voxel_1d)['Experiment']
 
     # Run
     [Camera_x, Camera_y] = Projector.camera_x_y(Experiment)
@@ -36,7 +37,8 @@ class ProjectorTest(unittest.TestCase):
         
   def test_q_and_mask(self: unittest.TestCase):
     # Initialize
-    Experiment = Projector.experiment_parameters()['Experiment']
+    n_voxel_1d = 31
+    Experiment = Projector.experiment_parameters(n_voxel_1d)['Experiment']
 
     # Run
     [Q, Circle_Index] = Projector.q_and_mask(Experiment)
@@ -48,10 +50,11 @@ class ProjectorTest(unittest.TestCase):
 
   def test_generate_single_image(self: unittest.TestCase):
     # Initialize
+    n_voxel_1d = 1
     nRot1D = 1
     N_loop = nRot1D ** 3
     R = Rotation.all_rot_variables(N_loop)
-    Experiment = Projector.experiment_parameters()['Experiment']
+    Experiment = Projector.experiment_parameters(n_voxel_1d)['Experiment']
     Protein = Projector.synsthesize_3d(Experiment['n_voxel_1d'])
     [Q, Circle_Index] = Projector.q_and_mask(Experiment)
     k = Projector.fourier_scaled_axes_from_grid(Protein['Grid_3D'])[2]
@@ -72,12 +75,13 @@ class ProjectorTest(unittest.TestCase):
 
   def test_generate(self: unittest.TestCase):
     # Initialize
+    n_voxel_1d = 31
     nRot1D = 2
     N_loop = nRot1D ** 3
-    Experiment = Projector.experiment_parameters()['Experiment']
+    Experiment = Projector.experiment_parameters(n_voxel_1d)['Experiment']
 
     # Run
-    Images = Projector.generate(nRot1D)[0]
+    [Images, R, Axis, Quat] = Projector.generate(nRot1D, n_voxel_1d)
 
     # Assert
     self.assertIsNotNone(Images)
