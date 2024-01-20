@@ -1,7 +1,9 @@
 import math
 import numpy as np
 
+from compute import ComputeUtils
 from utils import Utilities
+
 
 
 """
@@ -36,7 +38,7 @@ class Rotation:
     Theta_ = Theta_- np.mean(Theta_) + (np.pi / 2)
     Phi_ = Phi_- np.mean(Phi_)
 
-    Phi, Psi, Theta = Utilities.meshgrid_3d(Phi_, Psi_, Theta_)
+    Phi, Psi, Theta = ComputeUtils.meshgrid_3d(Phi_, Psi_, Theta_)
 
     Psi = Psi.reshape((1, n_orient))
     Theta = Theta.reshape((1, n_orient))
@@ -48,6 +50,8 @@ class Rotation:
       np.cos(Theta / 2) * np.sin(Psi / 2)])
 
     Q = Rotation.unit_mag_pos(Q)
+
+    Q = Utilities.to_real(Q)
 
     return Q
 
@@ -70,7 +74,11 @@ class Rotation:
   @staticmethod
   def Axis2RotMat(Axis: np.array) -> np.array:
     Theta = np.linalg.norm(Axis)
-    Axis = Axis / Theta
+
+    if (Theta == 0):
+      return np.eye(3)
+
+    Axis = np.clip(Axis / Theta, 0.0, 1.0)
 
     a = math.cos(Theta)
     la = 1 - a
@@ -85,6 +93,8 @@ class Rotation:
       [p * m * la - n * b, p * n * la + m * b, a + p ** 2 * la   ]
     ])
 
+    R = Utilities.to_real(R)
+
     return R
 
 
@@ -98,6 +108,8 @@ class Rotation:
 
     if np.sum(np.isnan(R.flatten())):
       print('Nan in rotation matrix batch')
+
+    R = Utilities.to_real(R)
 
     return R
 
@@ -115,7 +127,8 @@ class Rotation:
 
   @staticmethod
   def Quat2AxisSingle(Q: np.array) -> np.array:
-    Angle = np.real(2 * np.arccos(np.abs(Q[0])))
+    Angle = np.real(2 * np.arccos(np.clip(np.abs(Q[0]), 0.0, 1.0)))
+    Angle = Utilities.to_real(Angle)
 
     if Angle == 0:
       Axis = np.zeros((3,))
@@ -131,7 +144,7 @@ class Rotation:
     N = max(F.shape)
 
     U = (np.linspace(1, N, N) - (N + 1) / 2) / (N / 2)
-    [z, x, y] = Utilities.meshgrid_3d_single(U)
+    [z, x, y] = ComputeUtils.meshgrid_3d_single(U)
 
     x_size = x.size
     x_shape = x.shape
@@ -144,7 +157,7 @@ class Rotation:
     Qy = Q[1,:].reshape(x_shape)
     Qz = Q[2,:].reshape(x_shape)
 
-    Protein = Utilities.interp3(U, U, U, F, Qx, Qy, Qz)
+    Protein = ComputeUtils.interp3(U, U, U, F, Qx, Qy, Qz)
 
     return Protein
   
@@ -158,12 +171,12 @@ class Rotation:
 
     if r_2sin != 0:
         Theta = np.arctan2(r_2sin, np.matrix.trace(R) - 1)
+        Theta = Utilities.to_real(Theta)
         Axis = (Theta / r_2sin) * np.array([x, y, z]).reshape((3, 1))
-    elif R == np.eye(3):
+    elif Utilities.are_almost_equal(R, np.eye(3), 1e-6):
         Axis = np.zeros((3, 1))
     else:
-        print('Problem with the rotation matrix')
-        print(R)
+        Axis = np.zeros((3, 1))
 
     return Axis
 
@@ -195,3 +208,39 @@ class Rotation:
     Q = Rotation.axis_to_quat(Axis)
 
     return Q
+
+
+  @staticmethod
+  def geodesic_distance_matrix(Q: np.array) -> np.array:
+    if (len(Q.shape) != 2 or Q.shape[0] != 4):
+      raise Exception('Quaternion shape was ' + str(Q.shape))
+    
+    Utilities.check(not np.iscomplex(Q).any(), 'Complex array was encountered.')
+
+    return np.real(np.arccos(np.clip(np.matmul(Q.T, Q), 0, 1.0)))
+
+
+  @staticmethod
+  def mean_geodesic_distance_degrees(Q1: np.array, Q2: np.array) -> float:
+    return (180 / math.pi) * Rotation.mean_geodesic_distance(Q1, Q2)
+
+
+  @staticmethod
+  def mean_geodesic_distance(Q1: np.array, Q2: np.array) -> float:
+    Utilities.check(not np.iscomplex(Q1).any(), 'Complex array was encountered.')
+    Utilities.check(not np.iscomplex(Q2).any(), 'Complex array was encountered.')
+    Utilities.check(len(Q1.shape) == 2, 'Q1 shape')
+    Utilities.check(len(Q2.shape) == 2, 'Q2 shape')
+    Utilities.check(Q1.shape == Q2.shape, 'Q1 shape vs. Q2 shape')
+    Utilities.check(Q2.shape[0] == 4, 'Q.shape[0]')
+    N = Q1.shape[1]
+
+    Q1_matrix = Rotation.geodesic_distance_matrix(Q1)
+    Q2_matrix = Rotation.geodesic_distance_matrix(Q2)
+    diff = Q1_matrix.flatten() - Q2_matrix.flatten()
+    mean_q_distance = np.sum(np.abs(diff)) / (N * (N - 1))
+    mean_geodesic_distance = 2 * mean_q_distance
+
+    return mean_geodesic_distance
+
+

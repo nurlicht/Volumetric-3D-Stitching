@@ -1,59 +1,20 @@
 import unittest
 
 import numpy as np
-import scipy.interpolate
 
 
 """
-Utilities
+Utilities for test and miscellaneous (non-computational) functionalities
 """
 class Utilities:
 
   @staticmethod
-  def interp3(
-    x1: np.array,
-    y1: np.array,
-    z1: np.array,
-    F1: np.array,
-    x2: np.array,
-    y2: np.array,
-    z2: np.array
-  ) -> np.array :
-    return scipy.interpolate.RegularGridInterpolator((x1, y1, z1), F1, 'linear', False, 0)((x2, y2, z2))
-
-  @staticmethod
-  def meshgrid_3d(x: np.array, y: np.array, z: np.array) -> np.array:
-    nx = x.size
-    ny = y.size
-    nz = z.size
-
-    X = np.zeros((nx, ny, nz))
-    Y = np.zeros((nx, ny, nz))
-    Z = np.zeros((nx, ny, nz))
-
-    for i in range(0, nx):
-      for j in range(0, ny):
-        for k in range(0, nz):
-          X[i][j][k] = x[i]
-          Y[i][j][k] = y[j]
-          Z[i][j][k] = z[k]
-
-    return [X, Y, Z]
-
-  @staticmethod
-  def meshgrid_3d_single(x: np.array) -> np.array:
-    return Utilities.meshgrid_3d(x, x, x)
-  
-
-  @staticmethod
-  def are_equal(x_: np.array, y_: np.array) -> bool:
+  def are_equal(x_: np.array, y_: np.array, tolerance: float = 1e-12) -> bool:
     if (x_.shape != y_.shape):
       return False
 
     x = x_.flatten()
     y = y_.flatten()
-
-    tolerance = Utilities.tolerance()
 
     if (x.size == 1):
       return abs(x[0] - y[0]) < tolerance
@@ -63,7 +24,8 @@ class Utilities:
         return False
 
     return True
-  
+
+
   @staticmethod
   def has_nan(x: np.array) -> bool:
     for a in x.flatten():
@@ -71,7 +33,14 @@ class Utilities:
         return True
 
     return False
-  
+
+
+  @staticmethod
+  def to_real(x: np.array, tolerance: float = 1e-50) -> np.array:
+    if (not Utilities.are_almost_equal(np.imag(x), np.zeros(x.shape), tolerance)):
+      raise Exception('Complex array was encountered.')
+    return np.real(x)
+
   
   @staticmethod
   def assert_almost_equal(self: unittest.TestCase, x_: np.array, y_: np.array, p: float):
@@ -82,9 +51,11 @@ class Utilities:
 
     [Utilities.assert_almost_equal_hybrid_single(self, x[i], y[i], p) for i in range(x.size)]
 
+
   @staticmethod
   def assert_almost_equal_hybrid_single(self: unittest.TestCase, x: np.array, y: np.array, p: float):
     self.assertTrue(Utilities.are_almost_equal_hybrid_single(x, y, p))
+
 
   @staticmethod
   def are_almost_equal(x_: np.array, y_: np.array, p: float) -> bool:
@@ -100,13 +71,31 @@ class Utilities:
 
     return True
 
+
   @staticmethod
   def are_almost_equal_hybrid_single(x: np.array, y: np.array, p: float) -> bool:
     return (
       (abs(x) < p and abs(y) < p) or
-      abs((x - y) / y) < p
+      (y != 0 and abs((x - y) / y) < p)
     )
 
+
   @staticmethod
-  def tolerance() -> float:
-    return 1e-12 # 1e-12
+  def log_progress(label: str, i: int, N: int) -> None:
+    interval: int = 1
+    if (N > 1 and i > -1 and i % interval == 0 and label != None):
+      print (label + ': ' + str(round(100 * i / (N - 1))) + '%' + ' completed.', end = '\r', flush = True)
+
+
+  @staticmethod
+  def check(flag: bool, message: str):
+    if (not flag):
+      raise Exception(message)
+
+
+  @staticmethod
+  def check_nan_complex(x: np.array, x_label: str = '') -> bool:
+    Utilities.check(
+      not np.iscomplexobj(x) and not Utilities.has_nan(x),
+      'Invalid array was encountered' + ((' (' + x_label + ').') if x_label != '' else '')
+    )
