@@ -13,7 +13,7 @@ An analytical model (of the forward problem) suggests a numerical procedure (for
    orientations using the Distance Matrix
   4) Plotting the results
   5) Implementations
-     - Matlab ([arXiv:1411.7889](https://arxiv.org/abs/1411.7889))
+     - [Matlab](./src/matlab/DiffusionMap3dOrientations.m) (arXiv:[1411.7889](https://arxiv.org/abs/1411.7889))
      - [Octave](./src/octave/DiffusionMap3dOrientations.m)
      - [Python](./src/python/app.py)
 
